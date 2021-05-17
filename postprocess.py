@@ -3,7 +3,7 @@ from string import digits, ascii_lowercase, punctuation
 from copy import deepcopy
 from stop_words import get_stop_words
 
-STOPWORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh']
+STOPWORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh', 'one\'s']
 
 
 class bcolors:
@@ -22,6 +22,7 @@ def _clip_stopwords(spoiled_word_combination, stop_words):
     tokens = spoiled_word_combination.split()
     for i in range(len(tokens) - 1, -1, -1):
         if tokens[i] == '\'':
+            print(i, tokens[i-1:i+2])
             tokens = tokens[:i - 1] + [tokens[i - 1] + tokens[i] + tokens[i + 1]] + tokens[i + 2:]
 
     if all(t == tokens[0] for t in tokens) and len(tokens) > 1:
@@ -119,7 +120,7 @@ def make_highlighted_tokens(tokens, indicators):
             l += 1
         else:
             r = l
-            while r < N and indicators[r] == 1:
+            while r < N and indicators[r] == 1 or tokens[max(0, r - 1)] == '\'':
                 r += 1
             is_all_stopwords, pref, med, suf = _clip_stopwords(' '.join(tokens[l:r]), STOPWORDS)
             if not is_all_stopwords:
