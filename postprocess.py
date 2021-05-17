@@ -192,3 +192,9 @@ def make_postprocessed_tokens_3(tokens, labels):
         all_masked_texts.append(masked_text_local)
 
     return '\n'.join(all_masked_texts), all_original_phrases
+
+
+def prettify_html(html):
+    pref = '<p style="color: green; opacity: 0.80;">'
+    suf = '</p>'
+    return pref + html + suf
