@@ -128,3 +128,18 @@ def make_postprocessed_tokens(tokens, labels):
     all_tokens, indicators = expand_ranges(all_tokens, indicators)
     masked_text, original_phrases = make_highlighted_tokens(all_tokens, indicators)
     return masked_text, original_phrases
+
+
+def make_postprocessed_tokens_2(tokens, labels):
+    indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
+    all_tokens, all_indicators = [], []
+    all_original_phrases = []
+    all_masked_texts = []
+    for idx in range(len(tokens)):
+        indicators_local, tokens_local = glue_tokens(tokens[idx], indicators[idx])
+        tokens_local, indicators_local = expand_ranges(tokens_local, indicators_local)
+        masked_text_local, original_phrases_local = make_highlighted_tokens(tokens_local, indicators_local)
+        all_original_phrases.extend(original_phrases_local)
+        all_masked_texts.append(masked_text_local)
+
+    return '<br>'.join(all_masked_texts), all_original_phrases

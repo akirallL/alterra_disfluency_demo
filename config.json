@@ -10,5 +10,6 @@
       "threshold": 0.5,
       "name": "DISTILBERT_spoiled_ner_09_05__00_38.pth"
     }
-  ]
+  ],
+  "device": "cpu"
 }

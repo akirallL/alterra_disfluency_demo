@@ -265,7 +265,8 @@ label_list = ['none', 'wrong_word']
 # ]
 
 with open('config.json') as fl:
-    versions = json.load(fl)['versions']
+    config = json.load(fl)
+    versions = config['versions']
 
 trainers = []
 for version_info in versions:
@@ -288,6 +289,6 @@ for version_info in versions:
     )
 
     model.load_state_dict(
-        torch.load(os.path.join('models', version_info['name'])))
+        torch.load(os.path.join('models', version_info['name']), map_location=config['device']))
     model = model.eval()
     trainers.append((trainer, version_info['threshold']))
