@@ -107,8 +107,8 @@ if uploaded_file is not None:
     result, tokens, predictions = predict_text(string_data)
 
     # masked_text, original_phrases = make_postprocessed_tokens(tokens, predictions)
-    # masked_text, original_phrases = make_postprocessed_tokens_2(tokens, predictions)
-    masked_text, original_phrases = make_postprocessed_tokens_3(tokens, predictions)
+    masked_text, original_phrases = make_postprocessed_tokens_2(tokens, predictions)
+    # masked_text, original_phrases = make_postprocessed_tokens_3(tokens, predictions)
 
     # st.write(result)
 
