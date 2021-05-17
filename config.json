@@ -1,0 +1,14 @@
+{
+  "versions": [
+    {
+      "link": "https://vk.com/doc173261962_596707900?hash=051a9463879ac55293&dl=1b0b5f94a0bf388d52",
+      "threshold": 0.5,
+      "name": "DISTILBERT_base_cased_10pcnt_missspel_medium_dataset_tuned.pth"
+    },
+    {
+      "link": "https://vk.com/doc173261962_596708484?hash=f850b2fd4141ceaaa7&dl=454a43ec12537741e8",
+      "threshold": 0.5,
+      "name": "DISTILBERT_spoiled_ner_09_05__00_38.pth"
+    }
+  ]
+}
