@@ -6,6 +6,18 @@ from stop_words import get_stop_words
 STOPWORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh']
 
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
 def _clip_stopwords(spoiled_word_combination, stop_words):
     tokens = spoiled_word_combination.split()
     for i in range(len(tokens) - 1, -1, -1):
@@ -120,6 +132,30 @@ def make_highlighted_tokens(tokens, indicators):
     return text, original_phrases
 
 
+def make_highlighted_tokens_2(tokens, indicators):
+    l, r = 0, 0
+    N = len(tokens)
+    new_tokens = []
+    original_phrases = []
+    while l < N:
+        if indicators[l] == 0:
+            new_tokens.append(tokens[l])
+            l += 1
+        else:
+            r = l
+            while r < N and indicators[r] == 1:
+                r += 1
+            is_all_stopwords, pref, med, suf = _clip_stopwords(' '.join(tokens[l:r]), STOPWORDS)
+            if not is_all_stopwords:
+                new_tokens.append(bcolors.BOLD + '{} {} {}'.format(pref, med, suf) + bcolors.ENDC)
+            else:
+                new_tokens.append('{} {} {}'.format(pref, med, suf))
+            original_phrases.append(tokens[l:r])
+            l = r
+    text = ' '.join(new_tokens)
+    return text, original_phrases
+
+
 def make_postprocessed_tokens(tokens, labels):
     all_tokens = sum([x for x in tokens], [])
     indicators = sum([x for x in labels], [])
@@ -132,7 +168,6 @@ def make_postprocessed_tokens(tokens, labels):
 
 def make_postprocessed_tokens_2(tokens, labels):
     indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
-    all_tokens, all_indicators = [], []
     all_original_phrases = []
     all_masked_texts = []
     for idx in range(len(tokens)):
@@ -143,3 +178,17 @@ def make_postprocessed_tokens_2(tokens, labels):
         all_masked_texts.append(masked_text_local)
 
     return '<br>'.join(all_masked_texts), all_original_phrases
+
+
+def make_postprocessed_tokens_3(tokens, labels):
+    indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
+    all_original_phrases = []
+    all_masked_texts = []
+    for idx in range(len(tokens)):
+        indicators_local, tokens_local = glue_tokens(tokens[idx], indicators[idx])
+        tokens_local, indicators_local = expand_ranges(tokens_local, indicators_local)
+        masked_text_local, original_phrases_local = make_highlighted_tokens_2(tokens_local, indicators_local)
+        all_original_phrases.extend(original_phrases_local)
+        all_masked_texts.append(masked_text_local)
+
+    return '\n'.join(all_masked_texts), all_original_phrases

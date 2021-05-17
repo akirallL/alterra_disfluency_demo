@@ -89,7 +89,9 @@ def predict_text(text):
 
 
 text = st.text_input('Input Text', 'Life of Brian')
-st.write('Output', predict_text(text))
+res, tok, pred = predict_text(text)
+msk_txt, org_phr = make_postprocessed_tokens_3(tok, pred)
+st.write('Output', msk_txt)
 
 uploaded_file = st.file_uploader("Choose a file")
 if uploaded_file is not None:
@@ -105,7 +107,8 @@ if uploaded_file is not None:
     result, tokens, predictions = predict_text(string_data)
 
     # masked_text, original_phrases = make_postprocessed_tokens(tokens, predictions)
-    masked_text, original_phrases = make_postprocessed_tokens_2(tokens, predictions)
+    # masked_text, original_phrases = make_postprocessed_tokens_2(tokens, predictions)
+    masked_text, original_phrases = make_postprocessed_tokens_3(tokens, predictions)
 
     # st.write(result)
 
@@ -113,4 +116,5 @@ if uploaded_file is not None:
     # dataframe = pd.read_csv(uploaded_file)
     # st.write(dataframe)
     # components.html(result, scrolling=True)
-    components.html(masked_text, scrolling=True)
+    # components.html(masked_text, scrolling=True)
+    st.write(masked_text)
