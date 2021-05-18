@@ -9,7 +9,13 @@
       "link": "https://vk.com/doc173261962_596708484?hash=f850b2fd4141ceaaa7&dl=454a43ec12537741e8",
       "threshold": 0.5,
       "name": "DISTILBERT_spoiled_ner_09_05__00_38.pth"
+    },
+    {
+      "link": "https://vk.com/doc173261962_596883578?hash=b00daf8fc64333469b&dl=94e79061ccac0e0b73",
+      "threshold": 0.5,
+      "name": "DISTILBERT_uncased_spoiled_ner_18_05__17_08.pth"
     }
   ],
-  "device": "cpu"
+  "device": "cuda",
+  "max_seq_len": 128
 }
