@@ -3,7 +3,7 @@ from string import digits, ascii_lowercase, punctuation
 from copy import deepcopy
 from stop_words import get_stop_words
 
-STOPWORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh', 'one\'s']
+STOPWORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh', 'one\'s', 'it\'ll', 'whatever', 'he\'ll']
 
 
 class bcolors:
@@ -124,7 +124,7 @@ def make_highlighted_tokens(tokens, indicators):
                 r += 1
             is_all_stopwords, pref, med, suf = _clip_stopwords(' '.join(tokens[l:r]), STOPWORDS)
             if not is_all_stopwords:
-                new_tokens.append('<strong>{} {} {}</strong>'.format(pref, med, suf))
+                new_tokens.append('{} <strong>{}</strong> {}'.format(pref, med, suf))
             else:
                 new_tokens.append('{} {} {}'.format(pref, med, suf))
             original_phrases.append(tokens[l:r])

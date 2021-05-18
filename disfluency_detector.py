@@ -246,7 +246,7 @@ def download_model(url, filename):
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
                     totalbits += 1024
-                    print("Downloaded", totalbits * 1025, "KB...")
+                    print("Downloaded", totalbits // 1024, "KB...")
                     f.write(chunk)
 
 

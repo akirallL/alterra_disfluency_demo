@@ -51,7 +51,7 @@ st.title('disfluency detection app')
 def predict_text(text):
     sentences = process_text(text, '\n')
 
-    sentences_from_sides_gap = 10
+    sentences_from_sides_gap = 7
     N = len(sentences)
 
     sentences_with_contexts = []
