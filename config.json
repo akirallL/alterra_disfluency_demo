@@ -16,6 +16,6 @@
       "name": "DISTILBERT_uncased_spoiled_ner_18_05__17_08.pth"
     }
   ],
-  "device": "cuda",
+  "device": "cpu",
   "max_seq_len": 128
 }
