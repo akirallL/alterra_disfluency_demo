@@ -95,7 +95,7 @@ def apply_fixations(model_package, source_file=None, samples=None):
 def apply_fixations_for_single_text(model_package, tokens, labels):
     # tokens = text.split()
     # labels = [1 for _ in tokens]
-    sample = make_sample(tokens, [int(x == 'wrong_word') for x in labels])
+    sample = make_sample(tokens, labels)
     result = apply_fixations(model_package, samples=[sample])
     print(sample, tokens, labels)
     return result

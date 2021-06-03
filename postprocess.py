@@ -273,11 +273,15 @@ def make_postprocessed_tokens_2(tokens, labels):
     indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
     all_original_phrases = []
     all_masked_texts = []
+    new_tokens, new_labels = [], []
     test_samples_4_genererative_model = []
     for idx in range(len(tokens)):
         indicators_local, tokens_local = glue_tokens(tokens[idx], indicators[idx])
         tokens_local, indicators_local = expand_ranges(tokens_local, indicators_local)
-        test_samples_4_genererative_model.append(make_sample(*remove_stopword_highlighted_tokens(tokens_local, indicators_local)))
+        tokens_local, indicators_local = remove_stopword_highlighted_tokens(tokens_local, indicators_local)
+        new_tokens.append(tokens_local)
+        new_labels.append(indicators_local)
+        test_samples_4_genererative_model.append(make_sample(tokens_local, indicators_local))
         masked_text_local, original_phrases_local = make_highlighted_tokens(tokens_local, indicators_local)
         all_original_phrases.extend(original_phrases_local)
         all_masked_texts.append(masked_text_local)
@@ -286,7 +290,7 @@ def make_postprocessed_tokens_2(tokens, labels):
     with open('runtime_results/input.json', 'w') as f:
         json.dump(test_samples_4_genererative_model, f)
 
-    return '<br>'.join(all_masked_texts), all_original_phrases
+    return '<br>'.join(all_masked_texts), all_original_phrases, new_tokens, new_labels
 
 
 def make_postprocessed_tokens_3(tokens, labels):

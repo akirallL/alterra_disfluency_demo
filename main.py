@@ -102,8 +102,9 @@ def predict_text(text, format='txt'):
 
 text = st.text_input('Input Text', 'Life of Brian')
 res, tok, pred = predict_text(text, 'txt')
-msk_txt, org_phr = make_postprocessed_tokens_2(tok, pred)
+msk_txt, org_phr, tok, pred = make_postprocessed_tokens_2(tok, pred)
 components.html(prettify_html(msk_txt))
+print('TP', tok, pred)
 fixed = apply_fixations_for_single_text(models_package, tok[0], pred[0])
 components.html(prettify_html(fixed))
 
