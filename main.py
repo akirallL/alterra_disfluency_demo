@@ -104,6 +104,8 @@ text = st.text_input('Input Text', 'Life of Brian')
 res, tok, pred = predict_text(text, 'txt')
 msk_txt, org_phr = make_postprocessed_tokens_2(tok, pred)
 components.html(prettify_html(msk_txt))
+fixed = apply_fixations_for_single_text(models_package, tok[0], pred[0])
+components.html(prettify_html(fixed))
 
 uploaded_file = st.file_uploader("Choose a file")
 if uploaded_file is not None:

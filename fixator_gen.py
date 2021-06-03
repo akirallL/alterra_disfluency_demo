@@ -2,6 +2,7 @@ from transformers import BartForConditionalGeneration, BartTokenizer, BartConfig
 from transformers import AutoConfig
 import torch, json
 from munch import Munch
+from postprocess import make_sample
 
 
 def load_generator(model_name, tokenizer_name, config_name, device = torch.device('cuda')):
@@ -61,10 +62,15 @@ def highlight_fixations(sample, generated_output=None):
 
 
 
-def apply_fixations(model_package, source_file):
+def apply_fixations(model_package, source_file=None, samples=None):
     import json
-    with open(source_file) as fin:
-        samples = json.load(fin)
+
+    assert (samples != source_file), 'Either source file or samples must be specified'
+
+    if samples is None:
+        with open(source_file) as fin:
+            samples = json.load(fin)
+    
     resulting_samples = []
     for s in samples:
         if '#' not in s['source']:
@@ -84,6 +90,15 @@ def apply_fixations(model_package, source_file):
         print('OUT:', sent)
         resulting_samples.append(highlight_fixations(s, sent))
     return '<br>'.join([s['highlighted_result'] for s in resulting_samples])
+
+
+def apply_fixations_for_single_text(model_package, tokens, labels):
+    # tokens = text.split()
+    # labels = [1 for _ in tokens]
+    sample = make_sample(tokens, [int(x == 'wrong_word') for x in labels])
+    result = apply_fixations(model_package, samples=[sample])
+    print(sample, tokens, labels)
+    return result
 
 
 with open('config.json') as fl:
