@@ -105,6 +105,38 @@ def process_text(text, delim='.', remove_punct=True):
     return sentences
 
 
+def read_jsonl(text):
+    def jlopen(txt):
+        samples = []
+        for l in txt.split('\n'):
+            l = l.strip()
+            if not l:
+                continue
+            samples.append(json.loads(l))
+        return samples
+    scribd = jlopen(text)
+    recovered_tokens = []
+    true_predictions = []
+    for s in scribd:
+        sent = []
+        labels = []
+        for w in s['Words']:
+            label = int(w['Confidence'] <= -2.)
+            tokens = nltk.word_tokenize(w['Word'].lower())
+
+            new_tokens = [t.split('\'') for t in tokens]
+            new_tokens = [' \' '.join(tt).split() for tt in new_tokens]
+            tokens = sum(new_tokens, [])
+
+            labs = [label for t in tokens]
+            sent.extend(tokens)
+            labels.extend(labs)
+        recovered_tokens.append(sent)
+        true_predictions.append(labels)
+    sentences = [' '.join(rt) for rt in recovered_tokens]
+    return sentences, recovered_tokens, true_predictions
+
+
 from string import digits, ascii_lowercase
 from copy import deepcopy
 
@@ -270,7 +302,7 @@ with open('config.json') as fl:
 
 trainers = []
 for version_info in versions:
-    download_model(version_info['link'], version_info['name'])
+    # download_model(version_info['link'], version_info['name'])
     model = AutoModelForTokenClassification.from_pretrained(model_checkpoint, num_labels=len(label_list))
     args = TrainingArguments(
         "test-wwd",

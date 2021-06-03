@@ -16,6 +16,11 @@
       "name": "DISTILBERT_uncased_spoiled_ner_18_05__17_08.pth"
     }
   ],
-  "device": "cpu",
+  "generator_model": {
+    "model_name": "models/gen_models/bart_base_phonemes_2_tokens-new-qa",
+    "tokenizer_name": "facebook/bart-base",
+    "config_name": "facebook/bart-base"
+  },
+  "device": "cuda",
   "max_seq_len": 128
 }

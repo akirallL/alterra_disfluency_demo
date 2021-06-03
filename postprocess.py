@@ -2,8 +2,73 @@ import string
 from string import digits, ascii_lowercase, punctuation
 from copy import deepcopy
 from stop_words import get_stop_words
+import nltk
+from itertools import product
+import random
+from itertools import zip_longest
+
+alphabet = nltk.corpus.cmudict.dict()
+
 
 STOPWORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh', 'one\'s', 'it\'ll', 'whatever', 'he\'ll']
+
+
+def wordbreak(s):
+#     if len(s) >= 20:
+#         return None
+    print('S:', s)
+    s = s.lower()
+    if s in alphabet:
+        return alphabet[s]
+    middle = len(s) / 2
+    partition = sorted(list(range(len(s))), key=lambda x: (x - middle) ** 2 - x)
+    for i in partition:
+        pre, suf = (s[:i], s[i:])
+        if pre in alphabet and wordbreak(suf) is not None:
+            return [random.choice(alphabet[pre]) + random.choice(wordbreak(suf))]
+            return [x + y for x, y in product(alphabet[pre], wordbreak(suf))]
+    return None
+
+
+def make_sample(sent, labels):
+    def normal_word_to_replace(w):
+        if any(x not in string.ascii_letters + ' ' for x in w):
+            return False
+        if w in STOPWORDS:
+            return False
+        return True
+    indexes = [i for i in range(len(sent)) if labels[i] != 0]
+    ranges = []
+    idx = 0
+    k = len(indexes)
+    while idx < k:
+        l = idx
+        r = idx + 1
+        while r < k and indexes[r] == indexes[l] + (r - l):
+            r += 1
+        idx = r
+        ranges.append((indexes[l], indexes[r - 1] + 1))
+    
+    sample = {
+        'target': ' '.join(sent),
+        'source': deepcopy(sent)
+    }
+    
+    
+    
+    for rg in reversed(ranges):
+        l, r = rg
+        spelling = []
+        if any(not normal_word_to_replace(w) for w in sample['source'][l:r]):
+            continue
+        for w in sample['source'][l:r]:
+            print(w)
+            spell = wordbreak(w)[0]
+            spelling.extend(spell)
+        sample['source'][l:r] = ['#'] + spelling + ['#']
+    
+    sample['source'] = ' '.join(sample['source'])
+    return sample
 
 
 class bcolors:
@@ -70,7 +135,6 @@ def expand_ranges(tokens, indicators):
         if ind == 1 and tok in punctuation and tok != '\'':
             indicators[i] = 0
         elif tok == '\'':
-            # print(tokens[i - 1:i + 2])
             repl = False
             if i > 0 and all(x in ascii_lowercase for x in tokens[i - 1]):
                 indicators[i - 1] = 1
@@ -157,6 +221,44 @@ def make_highlighted_tokens_2(tokens, indicators):
     return text, original_phrases
 
 
+def remove_stopword_highlighted_tokens(tokens, indicators):
+    l, r = 0, 0
+    N = len(tokens)
+    new_tokens = []
+    new_labels = []
+    while l < N:
+        if indicators[l] == 0:
+            new_tokens.append(tokens[l])
+            new_labels.append(0)
+            l += 1
+        else:
+            r = l
+            while r < N and (indicators[r] == 1 or tokens[r] == '\'' or tokens[r-1] == '\''):
+                r += 1
+            is_all_stopwords, pref, med, suf = _clip_stopwords(' '.join(tokens[l:r]), STOPWORDS)
+            if not is_all_stopwords:
+                pref_tokens = pref.split()
+                for tok in pref_tokens:
+                    new_tokens.append(tok)
+                    new_labels.append(0)
+                
+                med_tokens = med.split()
+                for tok in med_tokens:
+                    new_tokens.append(tok)
+                    new_labels.append(1)
+
+                suff_tokens = suf.split()
+                for tok in suff_tokens:
+                    new_tokens.append(tok)
+                    new_labels.append(0)
+            else:
+                for idx in range(l, r):
+                    new_tokens.append(tokens[idx])
+                    new_labels.append(0)
+            l = r
+    return new_tokens, new_labels
+
+
 def make_postprocessed_tokens(tokens, labels):
     all_tokens = sum([x for x in tokens], [])
     indicators = sum([x for x in labels], [])
@@ -171,12 +273,18 @@ def make_postprocessed_tokens_2(tokens, labels):
     indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
     all_original_phrases = []
     all_masked_texts = []
+    test_samples_4_genererative_model = []
     for idx in range(len(tokens)):
         indicators_local, tokens_local = glue_tokens(tokens[idx], indicators[idx])
         tokens_local, indicators_local = expand_ranges(tokens_local, indicators_local)
+        test_samples_4_genererative_model.append(make_sample(*remove_stopword_highlighted_tokens(tokens_local, indicators_local)))
         masked_text_local, original_phrases_local = make_highlighted_tokens(tokens_local, indicators_local)
         all_original_phrases.extend(original_phrases_local)
         all_masked_texts.append(masked_text_local)
+    
+    import json
+    with open('runtime_results/input.json', 'w') as f:
+        json.dump(test_samples_4_genererative_model, f)
 
     return '<br>'.join(all_masked_texts), all_original_phrases
 
@@ -192,7 +300,48 @@ def make_postprocessed_tokens_3(tokens, labels):
         all_original_phrases.extend(original_phrases_local)
         all_masked_texts.append(masked_text_local)
 
-    return '\n'.join(all_masked_texts), all_original_phrases
+    return '\n'.join(all_masked_texts), 
+
+
+def make_postprocessed_tokens_with_asr_signal(tokens, labels, tokens_asr, labels_asr):
+    indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
+    all_original_phrases = []
+    all_masked_texts = []
+    test_samples_4_genererative_model = []
+    for idx in range(len(tokens)):
+        indicators_local, tokens_local = glue_tokens(tokens[idx], indicators[idx])
+        # print('LEN', len(tokens_local), len(tokens_asr[idx]))
+        # print('TT', tokens_local)
+        # indicators_local = labels_asr[idx]
+        tokens_local, indicators_local = expand_ranges(tokens_local, indicators_local)
+        test_samples_4_genererative_model.append(make_sample(*remove_stopword_highlighted_tokens(tokens_local, indicators_local)))
+        masked_text_local, original_phrases_local = make_highlighted_tokens(tokens_local, indicators_local)
+        all_original_phrases.extend(original_phrases_local)
+        all_masked_texts.append(masked_text_local)
+    
+    import json
+    with open('runtime_results/input.json', 'w') as f:
+        json.dump(test_samples_4_genererative_model, f)
+
+    return '<br>'.join(all_masked_texts), all_original_phrases
+
+
+def save_masked_tokens(tokens, labels):
+    indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
+    all_original_phrases = []
+    all_masked_texts = []
+    for idx in range(len(tokens)):
+        indicators_local, tokens_local = glue_tokens(tokens[idx], indicators[idx])
+        tokens_local, indicators_local = expand_ranges(tokens_local, indicators_local)
+        masked_text_local, original_phrases_local = make_masked_text(tokens_local, indicators_local)
+        all_original_phrases.extend(original_phrases_local)
+        all_masked_texts.append(masked_text_local)
+
+    import json
+    with open('/home/akiralll/PycharmProjects/alterra_cands_consumers/data/dummy_replacement_input_3.txt', 'w') as f:
+        f.write('\n'.join(all_masked_texts))
+    with open('/home/akiralll/PycharmProjects/alterra_cands_consumers/data/mask_2_spoiled_word_dummy_3.json', 'w') as f:
+        json.dump(all_original_phrases, f)
 
 
 def prettify_html(html):

@@ -9,6 +9,7 @@ import streamlit.components.v1 as components
 
 from disfluency_detector import *
 from postprocess import *
+from fixator_gen import *
 
 
 st.title('disfluency detection app')
@@ -48,10 +49,13 @@ st.title('disfluency detection app')
 # 'You selected: ', option
 
 
-def predict_text(text):
-    sentences = process_text(text, '\n')
+def predict_text(text, format='txt'):
+    if format == 'txt':
+        sentences = process_text(text, '\n', remove_punct=False)
+    elif format == 'jsonl':
+        sentences, recovered_tokens_asr, true_predictions_asr = read_jsonl(text)
 
-    sentences_from_sides_gap = 7
+    sentences_from_sides_gap = 5
     N = len(sentences)
 
     sentences_with_contexts = []
@@ -73,6 +77,8 @@ def predict_text(text):
 
     recovered_tokens = [[tokenizer.decode([x]) for x in t] for t in central_tokens]
 
+
+
     output_lines = []
     for idx in range(len(recovered_tokens)):
         assert len(recovered_tokens[idx]) == len(true_predictions[idx])
@@ -85,11 +91,17 @@ def predict_text(text):
         print(' '.join(bpe_tokens))
         output_lines.append(' '.join(bpe_tokens))
         print('\n\n')
-    return '<p>' + '\n'.join(output_lines) + '</p>', recovered_tokens, true_predictions
+    
+    if format == 'txt':
+        return '<p>' + '\n'.join(output_lines) + '</p>', recovered_tokens, true_predictions
+    elif format == 'jsonl':
+        return '<p>' + '\n'.join(output_lines) + '</p>', recovered_tokens, true_predictions, recovered_tokens_asr, true_predictions_asr
+    else:
+        raise NotImplementedError()
 
 
 text = st.text_input('Input Text', 'Life of Brian')
-res, tok, pred = predict_text(text)
+res, tok, pred = predict_text(text, 'txt')
 msk_txt, org_phr = make_postprocessed_tokens_2(tok, pred)
 components.html(prettify_html(msk_txt))
 
@@ -100,21 +112,16 @@ if uploaded_file is not None:
     # st.write(bytes_data)
     # To convert to a string based IO:
     stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
-    # st.write(stringio)
 
-    # To read file as string:
     string_data = stringio.read()
-    result, tokens, predictions = predict_text(string_data)
+    # result, tokens, predictions = predict_text(string_data, 'jsonl')
+    result, tokens, predictions, tokens_asr, predictions_asr = predict_text(string_data, 'jsonl')
 
-    # masked_text, original_phrases = make_postprocessed_tokens(tokens, predictions)
-    masked_text, original_phrases = make_postprocessed_tokens_2(tokens, predictions)
-    # masked_text, original_phrases = make_postprocessed_tokens_3(tokens, predictions)
+    # masked_text, original_phrases = make_postprocessed_tokens_2(tokens, predictions)
+    masked_text, original_phrases = make_postprocessed_tokens_with_asr_signal(tokens, predictions, tokens_asr, predictions_asr)
 
-    # st.write(result)
-
-    # # Can be used wherever a "file-like" object is accepted:
-    # dataframe = pd.read_csv(uploaded_file)
-    # st.write(dataframe)
-    # components.html(result, scrolling=True)
     components.html(prettify_html(masked_text), scrolling=True, height=600)
-    # st.write(masked_text)
+
+    fixed_html = apply_fixations(models_package, 'runtime_results/input.json')
+
+    components.html(prettify_html(fixed_html), scrolling=True, height=600)
