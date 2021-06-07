@@ -9,34 +9,45 @@ def load_generator(model_name, tokenizer_name, config_name, device = torch.devic
     config = BartConfig.from_pretrained(config_name, force_bos_token_to_be_generated=True)
     model = BartForConditionalGeneration.from_pretrained(model_name, config=config).eval().to(device)
     tok = BartTokenizer.from_pretrained(tokenizer_name)
+    # client_specific_words = list(config['client_specific_words'])
     return Munch(
         model=model,
         config=config,
         tokenizer=tok,
-        device=device
+        device=device,
+        # client_specific_words=client_specific_words
     )
 
+
+
+
+
 def highlight_fixations(sample, generated_output=None):
-    # # print('S', sample)
-    # # print('G', generated_output)
-    # chunks = []
-    # predictions = []
-    # total_len = 0
-    # N = len(sample['target'])
-    # l_ptr = 0
-    # remaining_text = sample['source']
-    # target_text = generated_output or sample['target']
-    # tgt_ptr = 0
-    # while True:
-    #     if '#' not in remaining_text:
-    #         chunks.append(remaining_text)
-    #         break
-    #     idx1 = remaining_text.index('#')
-    #     chk = remaining_text[:idx1]
-    #     chunks.append(chk)
-    #     remaining_text = remaining_text[idx1+1:]
-    #     idx2 = remaining_text.index('#')
-    #     remaining_text = remaining_text[idx2+1:]
+    # print('S', sample)
+    # print('G', generated_output)
+    chunks = []
+    N = len(sample['target'])
+    source_text = sample['source']
+    target_text = generated_output or sample['target']
+    if target_text.count('#') != source_text.count('#'):
+        print('SOURCE: {} \nTARGET: {}'.format(source_text, target_text))
+        sample['highlighted_result'] = target_text
+        return sample
+    while True:
+        if '#' not in target_text:
+            chunks.append(target_text)
+            break
+        idx1 = target_text.index('#')
+        chk = target_text[:idx1]
+        chunks.append(chk)
+        target_text = target_text[idx1+1:]
+        idx2 = target_text.index('#')
+        generated_text = target_text[:idx2]
+        generated_text = '<strong>{}</strong>'.format(generated_text)
+        chunks.append(generated_text)
+        target_text = target_text[idx2+1:]
+    
+
     
     # # print('C', chunks)
 
@@ -57,12 +68,12 @@ def highlight_fixations(sample, generated_output=None):
     # resulting_text = ' '.join(resulting_text)
 
     # sample['highlighted_result'] = resulting_text
-    sample['highlighted_result'] = generated_output or sample['target']
+    # sample['highlighted_result'] = generated_output or sample['target']
+    sample['highlighted_result'] = ' '.join(chunks)
     return sample
 
 
-
-def apply_fixations(model_package, source_file=None, samples=None):
+def apply_fixations(model_package, source_file=None, samples=None, context_gap=2):
     import json
 
     assert (samples != source_file), 'Either source file or samples must be specified'
@@ -72,11 +83,50 @@ def apply_fixations(model_package, source_file=None, samples=None):
             samples = json.load(fin)
     
     resulting_samples = []
-    for s in samples:
+    N = len(samples)
+    i = 0
+    cache = []
+    while i < N:
+        s = samples[i]
         if '#' not in s['source']:
-            resulting_samples.append(highlight_fixations(s))
+            cache.append(s)
+
+            # resulting_samples.append(highlight_fixations(s))
+            i += 1
             continue
-        example_english_phrase = s['source']
+        else:
+            cache = list(reversed(cache))
+            left_context = []
+            for l in range(min(len(cache), context_gap)):
+                left_context.append(cache[l]['source'].strip().rstrip('$%'))
+            cache = cache[min(len(cache), context_gap):]
+            for c in reversed(cache):
+                resulting_samples.append(highlight_fixations(c))
+            
+            cache = []
+            
+            left_context = list(reversed(left_context))
+
+            right_context = []
+            r = i + 1
+            for r in range(i + 1, min(N, i + context_gap + 1)):
+                if '#' not in samples[r]['source']:
+                    right_context.append(samples[r]['source'].strip().rstrip('$%'))
+                else:
+                    break
+            
+            i = r
+
+            left_context = ' '.join(left_context)
+            right_context = ' '.join(right_context)
+
+            suffix = s['source'][s['source'].index('$%'):]
+            cleaned_text = s['source'][:s['source'].index('$%')].strip()
+
+            example_english_phrase = ' '.join([left_context, cleaned_text, right_context, suffix])
+        
+        # example_english_phrase = s['source']
+
         print('IN: ', example_english_phrase)
 
         batch = model_package.tokenizer(example_english_phrase, return_tensors='pt')
@@ -89,6 +139,10 @@ def apply_fixations(model_package, source_file=None, samples=None):
         sent = model_package.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         print('OUT:', sent)
         resulting_samples.append(highlight_fixations(s, sent))
+    
+    for c in cache:
+        resulting_samples.append(highlight_fixations(c))
+
     return '<br>'.join([s['highlighted_result'] for s in resulting_samples])
 
 

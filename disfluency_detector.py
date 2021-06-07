@@ -10,6 +10,9 @@ import numpy as np
 from scipy.special import softmax
 import nltk
 import streamlit as st
+from stop_words import get_stop_words
+
+STOP_WORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh', 'one\'s', 'it\'ll', 'whatever', 'he\'ll']
 
 
 # class bcolors:
@@ -161,7 +164,7 @@ def expand_ranges(tokens, indicators):
         if ind == 1 and tok in punctuation and tok != '\'':
             indicators[i] = 0
         elif tok == '\'':
-            print(tokens[i - 1:i + 2])
+            # print(tokens[i - 1:i + 2])
             repl = False
             if i > 0 and all(x in ascii_lowercase for x in tokens[i - 1]):
                 indicators[i - 1] = 1
@@ -171,6 +174,8 @@ def expand_ranges(tokens, indicators):
                 repl = True
             if repl:
                 indicators[i] = 1
+        elif ind == 1 and i > 0 and indicators[i - 1] == 0 and tokens[i - 1] in STOP_WORDS:
+            indicators[i - 1] = 1
 
     for i, (tok, ind) in enumerate(zip(tokens, previous_indicators)):
         if i > 0 and i + 1 < N and previous_indicators[i - 1] == 1 and previous_indicators[i + 1] == 1 and \

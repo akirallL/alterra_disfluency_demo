@@ -17,10 +17,44 @@
     }
   ],
   "generator_model": {
-    "model_name": "models/gen_models/bart_base_phonemes_2_tokens-new-qa",
+    "model_name": "models/gen_models/bart_base_phonemes_2_tokens-new-qa-alterra-3",
     "tokenizer_name": "facebook/bart-base",
     "config_name": "facebook/bart-base"
   },
   "device": "cuda",
-  "max_seq_len": 128
+  "max_seq_len": 128,
+  "client_specific_words": [
+    "zendesk",
+    "api",
+    "center",
+    "palo alto",
+    "bot",
+    "engine",
+    "messenger",
+    "search",
+    "app",
+    "faq",
+    "manychat",
+    "chatbot",
+    "automate",
+    "colibri",
+    "corpus",
+    "nlp",
+    "california",
+    "query",
+    "phraser",
+    "alterra",
+    "ai",
+    "answer",
+    "store",
+    "headquarters",
+    "agent",
+    "help",
+    "hq",
+    "meeting",
+    "template",
+    "address",
+    "client"
+  ],
+  "cmu_dict_path": "models/cmu_dict"
 }

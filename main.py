@@ -10,6 +10,7 @@ import streamlit.components.v1 as components
 from disfluency_detector import *
 from postprocess import *
 from fixator_gen import *
+from meaningful_words_extractor import read_meaningful_words
 
 
 st.title('disfluency detection app')
@@ -108,6 +109,8 @@ print('TP', tok, pred)
 fixed = apply_fixations_for_single_text(models_package, tok[0], pred[0])
 components.html(prettify_html(fixed))
 
+include_conversation_vocabulary = st.checkbox('Include conversation vocabulary')
+
 uploaded_file = st.file_uploader("Choose a file")
 if uploaded_file is not None:
     # To read file as bytes:
@@ -117,11 +120,14 @@ if uploaded_file is not None:
     stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
 
     string_data = stringio.read()
+    meaningful_words = read_meaningful_words(string_data, 50) if include_conversation_vocabulary else None
+    print(meaningful_words)
     # result, tokens, predictions = predict_text(string_data, 'jsonl')
     result, tokens, predictions, tokens_asr, predictions_asr = predict_text(string_data, 'jsonl')
 
     # masked_text, original_phrases = make_postprocessed_tokens_2(tokens, predictions)
-    masked_text, original_phrases = make_postprocessed_tokens_with_asr_signal(tokens, predictions, tokens_asr, predictions_asr)
+    masked_text, original_phrases = make_postprocessed_tokens_with_asr_signal(
+        tokens, predictions, tokens_asr, predictions_asr, conversation_specific_tokens=meaningful_words)
 
     components.html(prettify_html(masked_text), scrolling=True, height=600)
 

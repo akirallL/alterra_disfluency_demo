@@ -6,31 +6,36 @@ import nltk
 from itertools import product
 import random
 from itertools import zip_longest
+import json
+from phonemes import STOP_WORDS, get_top_phoneme_neighbors, wordbreak
 
 alphabet = nltk.corpus.cmudict.dict()
 
 
 STOPWORDS = get_stop_words('en') + ['ah', 'oh', 'eh', 'um', 'uh', 'one\'s', 'it\'ll', 'whatever', 'he\'ll']
 
-
-def wordbreak(s):
-#     if len(s) >= 20:
-#         return None
-    print('S:', s)
-    s = s.lower()
-    if s in alphabet:
-        return alphabet[s]
-    middle = len(s) / 2
-    partition = sorted(list(range(len(s))), key=lambda x: (x - middle) ** 2 - x)
-    for i in partition:
-        pre, suf = (s[:i], s[i:])
-        if pre in alphabet and wordbreak(suf) is not None:
-            return [random.choice(alphabet[pre]) + random.choice(wordbreak(suf))]
-            return [x + y for x, y in product(alphabet[pre], wordbreak(suf))]
-    return None
+with open('config.json') as fl:
+    config = json.load(fl)
 
 
-def make_sample(sent, labels):
+# def wordbreak(s):
+# #     if len(s) >= 20:
+# #         return None
+#     print('S:', s)
+#     s = s.lower()
+#     if s in alphabet:
+#         return alphabet[s]
+#     middle = len(s) / 2
+#     partition = sorted(list(range(len(s))), key=lambda x: (x - middle) ** 2 - x)
+#     for i in partition:
+#         pre, suf = (s[:i], s[i:])
+#         if pre in alphabet and wordbreak(suf) is not None:
+#             return [random.choice(alphabet[pre]) + random.choice(wordbreak(suf))]
+#             return [x + y for x, y in product(alphabet[pre], wordbreak(suf))]
+#     return None
+
+
+def make_sample(sent, labels, conversation_specific_tokens=None):
     def normal_word_to_replace(w):
         if any(x not in string.ascii_letters + ' ' for x in w):
             return False
@@ -54,7 +59,11 @@ def make_sample(sent, labels):
         'source': deepcopy(sent)
     }
     
-    
+
+    specific_words = config['client_specific_words'] + list(conversation_specific_tokens or [])
+
+
+    client_specific_candidates = []
     
     for rg in reversed(ranges):
         l, r = rg
@@ -63,11 +72,19 @@ def make_sample(sent, labels):
             continue
         for w in sample['source'][l:r]:
             print(w)
-            spell = wordbreak(w)[0]
+            w_joined = ''.join([x.lower() for x in w.split() if x])
+            w_candidates = get_top_phoneme_neighbors(w_joined, specific_words, n_top=10)
+            client_specific_candidates.extend(w_candidates + [w.lower()])
+            spell = wordbreak(w_joined)[0]
             spelling.extend(spell)
         sample['source'][l:r] = ['#'] + spelling + ['#']
     
-    sample['source'] = ' '.join(sample['source'])
+    client_specific_candidates = list(set(client_specific_candidates))
+    random.shuffle(client_specific_candidates)
+
+    suffix = ' $% ' + ' ; '.join(client_specific_candidates)
+
+    sample['source'] = ' '.join(sample['source']) + suffix
     return sample
 
 
@@ -144,6 +161,12 @@ def expand_ranges(tokens, indicators):
                 repl = True
             if repl:
                 indicators[i] = 1
+        # else:
+        #     if ind == 1 and i > 0 and indicators[i - 1] == 0 and tokens[i - 1] in STOPWORDS:
+        #         indicators[i - 1] = 1
+                # raise Exception('TOKEN: {} {}'.format(tokens[i], tokens[i - 1] in STOPWORDS))
+        elif ind == 1 and i > 0 and indicators[i - 1] == 0 and tokens[i].startswith('desk'):
+            indicators[i - 1] = 1
 
     for i, (tok, ind) in enumerate(zip(tokens, previous_indicators)):
         if i > 0 and i + 1 < N and previous_indicators[i - 1] == 1 and previous_indicators[i + 1] == 1 and \
@@ -237,10 +260,24 @@ def remove_stopword_highlighted_tokens(tokens, indicators):
                 r += 1
             is_all_stopwords, pref, med, suf = _clip_stopwords(' '.join(tokens[l:r]), STOPWORDS)
             if not is_all_stopwords:
+                # pref_tokens = pref.split()
+                # for tok in pref_tokens:
+                #     new_tokens.append(tok)
+                #     new_labels.append(0)
+                
+                # med_tokens = med.split()
+                # for tok in med_tokens:
+                #     new_tokens.append(tok)
+                #     new_labels.append(1)
+
+                # suff_tokens = suf.split()
+                # for tok in suff_tokens:
+                #     new_tokens.append(tok)
+                #     new_labels.append(0)
                 pref_tokens = pref.split()
                 for tok in pref_tokens:
                     new_tokens.append(tok)
-                    new_labels.append(0)
+                    new_labels.append(1)
                 
                 med_tokens = med.split()
                 for tok in med_tokens:
@@ -250,7 +287,7 @@ def remove_stopword_highlighted_tokens(tokens, indicators):
                 suff_tokens = suf.split()
                 for tok in suff_tokens:
                     new_tokens.append(tok)
-                    new_labels.append(0)
+                    new_labels.append(1)
             else:
                 for idx in range(l, r):
                     new_tokens.append(tokens[idx])
@@ -307,7 +344,7 @@ def make_postprocessed_tokens_3(tokens, labels):
     return '\n'.join(all_masked_texts), 
 
 
-def make_postprocessed_tokens_with_asr_signal(tokens, labels, tokens_asr, labels_asr):
+def make_postprocessed_tokens_with_asr_signal(tokens, labels, tokens_asr, labels_asr, conversation_specific_tokens=None):
     indicators = [[int(x == 'wrong_word') for x in sent_labels] for sent_labels in labels]
     all_original_phrases = []
     all_masked_texts = []
@@ -318,7 +355,12 @@ def make_postprocessed_tokens_with_asr_signal(tokens, labels, tokens_asr, labels
         # print('TT', tokens_local)
         # indicators_local = labels_asr[idx]
         tokens_local, indicators_local = expand_ranges(tokens_local, indicators_local)
-        test_samples_4_genererative_model.append(make_sample(*remove_stopword_highlighted_tokens(tokens_local, indicators_local)))
+        test_samples_4_genererative_model.append(
+            make_sample(
+                conversation_specific_tokens=conversation_specific_tokens,
+                *remove_stopword_highlighted_tokens(tokens_local, indicators_local)
+            )
+        )
         masked_text_local, original_phrases_local = make_highlighted_tokens(tokens_local, indicators_local)
         all_original_phrases.extend(original_phrases_local)
         all_masked_texts.append(masked_text_local)
