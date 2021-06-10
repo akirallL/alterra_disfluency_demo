@@ -7,7 +7,7 @@ from itertools import product
 import random
 from itertools import zip_longest
 import json
-from phonemes import STOP_WORDS, get_top_phoneme_neighbors, wordbreak
+from phonemes import STOP_WORDS, get_top_phoneme_neighbors, wordbreak, get_pronounce_dist
 
 alphabet = nltk.corpus.cmudict.dict()
 
@@ -74,15 +74,23 @@ def make_sample(sent, labels, conversation_specific_tokens=None):
             print(w)
             w_joined = ''.join([x.lower() for x in w.split() if x])
             w_candidates = get_top_phoneme_neighbors(w_joined, specific_words, n_top=10)
-            client_specific_candidates.extend(w_candidates + [w.lower()])
+
+            local_candidates = w_candidates + [w.lower()]
+
+            local_candidates = list(sorted(set(local_candidates), key=lambda x: get_pronounce_dist(w, x)))
+
+            client_specific_candidates.extend(local_candidates)
             spell = wordbreak(w_joined)[0]
             spelling.extend(spell)
         sample['source'][l:r] = ['#'] + spelling + ['#']
     
-    client_specific_candidates = list(set(client_specific_candidates))
-    random.shuffle(client_specific_candidates)
+    # client_specific_candidates = list(set(client_specific_candidates))
+    # random.shuffle(client_specific_candidates)
 
     suffix = ' $% ' + ' ; '.join(client_specific_candidates)
+
+    bad_punct = ''.join(x for x in string.punctuation if x not in ['\'', '#', '$', '%'])
+    sample['source'] = [t for t in sample['source'] if t not in bad_punct]
 
     sample['source'] = ' '.join(sample['source']) + suffix
     return sample

@@ -251,7 +251,11 @@ def apply_set_of_trainers(trainers_collection, tokens_batch, sentences_with_cont
         raw_predictions, labels, _ = trainer.predict(tokens_batch)
         # predictions = np.argmax(raw_predictions, axis=2)
         raw_preds_sf = softmax(raw_predictions, axis=2)
-        predictions = (raw_preds_sf[:, :, 1] > threshold).astype(np.int)
+        if raw_preds_sf.shape[2] != 2:
+            predictions = np.argmax(raw_predictions, axis=2)
+            predictions = (predictions != 0).astype(np.int)
+        else:
+            predictions = (raw_preds_sf[:, :, 1] > threshold).astype(np.int)
 
         # Remove ignored index (special tokens)
         true_predictions_ = [
@@ -287,12 +291,6 @@ def download_model(url, filename):
                     f.write(chunk)
 
 
-model_checkpoint = 'distilbert-base-uncased'
-
-tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
-
-data_collator = DataCollatorForTokenClassification(tokenizer)
-
 label_list = ['none', 'wrong_word']
 
 # versions = [
@@ -307,8 +305,15 @@ with open('config.json') as fl:
 
 trainers = []
 for version_info in versions:
+    model_checkpoint = version_info.get('model_type', 'distilbert-base-uncased')
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+    data_collator = DataCollatorForTokenClassification(tokenizer)
     # download_model(version_info['link'], version_info['name'])
-    model = AutoModelForTokenClassification.from_pretrained(model_checkpoint, num_labels=len(label_list))
+    if 'label_list' in version_info:
+        n_labels = len(version_info['label_list'])
+    else:
+        n_labels = len(label_list)
+    model = AutoModelForTokenClassification.from_pretrained(model_checkpoint, num_labels=n_labels)
     args = TrainingArguments(
         "test-wwd",
         evaluation_strategy = "epoch",

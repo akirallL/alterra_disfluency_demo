@@ -17,7 +17,7 @@
     }
   ],
   "generator_model": {
-    "model_name": "models/gen_models/bart_base_phonemes_2_tokens-new-qa-alterra-3",
+    "model_name": "models/gen_models/bart_base_phonemes_2_tokens-new-qa-alterra-6",
     "tokenizer_name": "facebook/bart-base",
     "config_name": "facebook/bart-base"
   },
