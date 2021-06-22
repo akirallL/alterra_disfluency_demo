@@ -5,11 +5,13 @@ import numpy as np
 import pandas as pd
 from io import StringIO
 import json, nltk, string
+from copy import deepcopy
 
 import streamlit.components.v1 as components
 
 from models import load_highlighter, tokenize_and_align_labels, make_contexted_samples, TensorDataset, glue_tokens, make_highlighted_text
 from textwrap import dedent
+from lr_fixator import get_most_meaningful_words, read_tokens, get_ngrams_from_client_speech
 
 
 st.title('disfluency detection app')
@@ -71,16 +73,28 @@ def read_jsonl(text):
 
 model_pack = load_highlighter('./models/distilbert_with_confidences_transformer.pth')
 
+THRESCHOLD = float(st.number_input(label='Sensivity', value=0.5, min_value=0.0, max_value=1.0))
+
+include_conversation_vocabulary = st.checkbox('Include conversation vocabulary')
+
+client_vocab_default = dedent('''
+alterra phraser manychat chatfuel zendesk colibri query covid
+intent bot nlp rnn api semantically answer corpus messenger
+coronavirus name webhook automate faq timestamp slack integer 
+template demo paloalto
+''')
+
+
 txt = st.text_area(
     label='special vocab', 
-    value=dedent('''alterra phraser manychat chatfuel zendesk colibri query covid
-    intent bot nlp rnn api semantically answer corpus messenger
-    coronavirus name webhook automate faq timestamp slack integer 
-    template demo
-    ''')
+    value=client_vocab_default
 )
 
-CLIENT_WORDS = [w.strip() for w in txt.split() if w.strip()]
+CLIENT_WORDS = {'special_vocab': [w.strip() for w in txt.split() if w.strip()]}
+CLIENT_WORDS['total_vocabulary'] = deepcopy(CLIENT_WORDS['special_vocab'])
+
+alterrra_tokens = read_tokens('/home/akiralll/Downloads/texts.txt')
+HELP_VOCAB =  get_most_meaningful_words(alterrra_tokens, n_top=500)
 
 uploaded_file = st.file_uploader("Choose a file")
 if uploaded_file is not None:
@@ -94,28 +108,25 @@ if uploaded_file is not None:
 
     tokens, confidences = read_jsonl(string_data)
 
+    if include_conversation_vocabulary:
+        # CLIENT_WORDS['conversation_unigrams'] = get_ngrams_from_client_speech(sum(tokens, []), 1)
+        # CLIENT_WORDS['conversation_bigrams'] = get_ngrams_from_client_speech(sum(tokens, []), 2)
+        CLIENT_WORDS['conversation_ngrams'] = {}
+        for i in range(1, 6):
+            CLIENT_WORDS['conversation_ngrams'][i] = get_ngrams_from_client_speech(sum(tokens, []), i)
+        # print(CLIENT_WORDS['conversation_ngrams'][3])
+        for k in CLIENT_WORDS['conversation_ngrams'].keys():
+            CLIENT_WORDS['total_vocabulary'].extend(CLIENT_WORDS['conversation_ngrams'][k])
+        CLIENT_WORDS['total_vocabulary'] = list(set(CLIENT_WORDS['total_vocabulary']))
+
     tokenized_inputs = tokenize_and_align_labels({'tokens': tokens, 'confidences': confidences}, model_pack.tok)
-
-    # string_data = open('/home/akiralll/Downloads/jsonl/nhs.jsonl').read()
-
-    # tokens, confidences = read_jsonl(string_data)
-# 
-    # tokenized_inputs = tokenize_and_align_labels({'tokens': tokens, 'confidences': confidences}, model_pack.tok)
-
-    print(tokenized_inputs['input_ids'][0])
-    print(tokenized_inputs['confidences'][0])
-    print(tokenized_inputs['labels'][0])
-    print(tokenized_inputs['words'][0])
-    print(tokenized_inputs['initial_confidences'][0])
-    print(tokenized_inputs['token_type_ids'][0])
-    print(tokenized_inputs.keys())
 
     from torch.utils.data.dataloader import DataLoader
     import torch
     device = torch.device('cuda')
-    print('Before expand')
+
     inputs_with_context = make_contexted_samples(tokenized_inputs, 1, max_input_length=256)
-    print('After expand')
+
     test_dataset = TensorDataset(inputs_with_context, tok=model_pack.tok, max_length=256)
     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
@@ -165,6 +176,12 @@ if uploaded_file is not None:
         result['tokens'].append(glued_toks)
         result['labels'].append(glued_labs)
 
-    html = make_highlighted_text(result['tokens'], result['labels'], CLIENT_WORDS=CLIENT_WORDS)
-    components.html(html, scrolling=True, height=600)
+    if include_conversation_vocabulary:
+        st.text_area(
+            label='joined conversation and client vocab', 
+            value='\t'.join(list(sorted(CLIENT_WORDS['total_vocabulary'])))
+        )
+
+    html = make_highlighted_text(result['tokens'], result['labels'], CLIENT_WORDS=CLIENT_WORDS, HELP_VOCAB=HELP_VOCAB, THRESCHOLD=THRESCHOLD)
+    components.html(html, scrolling=True, height=600, width=1200)
     # print(html)

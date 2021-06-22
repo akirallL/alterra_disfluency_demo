@@ -1,3 +1,5 @@
+from collections import defaultdict
+from re import template
 from disfluency_detector import STOP_WORDS
 import torch
 import torch.nn as nn
@@ -14,6 +16,9 @@ from sklearn.model_selection import train_test_split
 from copy import deepcopy
 import streamlit as st
 from phonemes import get_top_phoneme_neighbors
+from lr_fixator import make_test_sample_2, evaluate_sample
+from phrase_reranker import rerank_by_model
+from candidate import make_neighbors_flow, rank_candidates
 
 
 class FloatTransformer(nn.Module):
@@ -409,7 +414,7 @@ def _clip_stopwords(tokens, stop_words):
     return False, prefix, ' '.join(tokens[i1:i2 + 1]), suffix
 
 
-def make_highlighted_string(tokens, indicators, CLIENT_WORDS=None):
+def make_highlighted_string(tokens, indicators, CLIENT_WORDS=None, apply_replacements=False, HELP_VOCAB=None):
     THRESCHOLD = 0.5
 
     from stop_words import get_stop_words
@@ -431,14 +436,26 @@ def make_highlighted_string(tokens, indicators, CLIENT_WORDS=None):
             brightness = int(brightness * 10) * 10
             # print(brightness)
 
-            if brightness >= THRESCHOLD and CLIENT_WORDS is not None:
-                candidates = get_top_phoneme_neighbors(med, CLIENT_WORDS)
-                tooltip = 'data-tooltip="{}"'.format(' '.join(candidates))
+            if apply_replacements:
+                if brightness >= THRESCHOLD and CLIENT_WORDS is not None:
+                    candidates = CLIENT_WORDS['total_vocabulary'] + [med] # get_top_phoneme_neighbors(med, CLIENT_WORDS, return_scores=True)
+                    badly_recognized_text = med.split()
+                    sample = make_test_sample_2(med, candidates, HELP_VOCAB)
+                    # print(sample)
+                    # print('-----------------')
+                    result = evaluate_sample(sample, med)
+                    tooltip = 'data-tooltip="{}"'.format('; '.join([x[0] for x in result[1:20]]))
+                else:
+                    tooltip = ''
             else:
-                tooltip = ''
+                if brightness >= THRESCHOLD and CLIENT_WORDS is not None:
+                    candidates = get_top_phoneme_neighbors(med, CLIENT_WORDS['total_vocabulary'])
+                    tooltip = 'data-tooltip="{}"'.format('; '.join(candidates))
+                else:
+                    tooltip = ''
 
             if not is_all_stopwords:
-                new_tokens.append('{} <strong class="brightness-{}" {}>{}</strong> {}'.format(pref, brightness, tooltip, med, suf))
+                new_tokens.append('{} <strong class="brightness-{}" {}>{}</strong> {}'.format(pref, 100, tooltip, med, suf))
             else:
                 new_tokens.append('{} {} {}'.format(pref, med, suf))
             original_phrases.append(tokens[l:r])
@@ -447,7 +464,172 @@ def make_highlighted_string(tokens, indicators, CLIENT_WORDS=None):
     return text
 
 
-def make_highlighted_text(tokens_list, predictions_list, CLIENT_WORDS=None):
+def make_highlighted_string_2(tokens, 
+            indicators, 
+            BADLY_RECOGNIZED_WORDS,
+            ALL_TOKENS,
+            CLIENT_WORDS=None, 
+            pure_phonemes=False, 
+            HELP_VOCAB=None, 
+            prev_texts=None, 
+            post_texts=None, 
+            THRESCHOLD=0.5):
+    THRESCHOLD = THRESCHOLD
+
+    from stop_words import get_stop_words
+    STOP_WORDS = get_stop_words('en')
+    l, r = 0, 0
+    N = len(tokens)
+    new_tokens = []
+    original_phrases = []
+
+    bad_ranges = []
+
+    while l < N:
+        if indicators[l] <= THRESCHOLD:
+            new_tokens.append(tokens[l])
+            l += 1
+        else:
+            r = l
+            while r < N and indicators[r] > THRESCHOLD or tokens[max(0, r - 1)] == '\'':
+                r += 1
+            is_all_stopwords, pref, med, suf = _clip_stopwords(tokens[l:r], STOP_WORDS)
+            pref_toks = pref.split()
+            bad_toks = med.split()
+            suf_toks = suf.split()
+            if is_all_stopwords:
+                for t in pref_toks + bad_toks + suf_toks:
+                    if not t:
+                        continue
+                    new_tokens.append(t)
+            else:
+                brightness = max(indicators[l:r] + [0])
+                brightness = int(brightness * 10) * 10
+                for t in pref_toks:
+                    if not t:
+                        continue
+                    new_tokens.append(t)
+                
+                bad_ranges.append((len(new_tokens), len(new_tokens) + len(bad_toks), brightness))
+
+                for t in bad_toks:
+                    if not t:
+                        continue
+                    new_tokens.append(t)
+
+                for t in suf_toks:
+                    if not t:
+                        continue
+                    new_tokens.append(t)
+            l = r
+    
+    print('BADLY_RECOGNIZED_WORDS[anson]', BADLY_RECOGNIZED_WORDS['anson'])
+    print('BADLY_RECOGNIZED_WORDS[temple]', BADLY_RECOGNIZED_WORDS['temple'])
+    print('BADLY_RECOGNIZED_WORDS[template]', BADLY_RECOGNIZED_WORDS['template'])
+    print('BADLY_RECOGNIZED_WORDS[bot]', BADLY_RECOGNIZED_WORDS['bot'])
+    
+    new_tokens_copy = deepcopy(new_tokens)
+    bad_ranges.sort(reverse=True)
+    for l, r, brightness in bad_ranges:
+        # print("lr", l, r)
+        med = ' '.join(new_tokens[l:r])
+        if brightness >= THRESCHOLD and CLIENT_WORDS is not None:
+            if pure_phonemes:
+                candidates = get_top_phoneme_neighbors(med, CLIENT_WORDS['total_vocabulary'])
+            else:
+                candidates = make_neighbors_flow(med, CLIENT_WORDS, n_top=10, BADLY_RECOGNIZED_WORDS=BADLY_RECOGNIZED_WORDS)
+
+            # template
+            central_tokens = new_tokens_copy[:l] + ['{}'] + new_tokens_copy[r:]
+            temaplate = prev_texts + ' ' + ' '.join(central_tokens) + ' ' + post_texts
+            candidates = rerank_by_model(temaplate, candidates)
+
+            if candidates:
+                pure_cand_words, nll_cands_scores = zip(*candidates)
+
+                candidates = rank_candidates(new_tokens[l:r], pure_cand_words, nll_cands_scores, BADLY_RECOGNIZED_WORDS)
+
+            # tooltip = 'data-tooltip="{}"'.format('; '.join(candidates))
+            tooltip = 'data-tooltip="{}"'.format('; '.join([f'{x}' for (x, y) in candidates]))
+        else:
+            tooltip = ''
+
+        brightness = 100
+        new_tokens[l:r] = ['<strong class="brightness-{}" {}>{}</strong>'.format(brightness, tooltip, med)]
+    # print(new_tokens)
+    text = ' '.join(new_tokens)
+    return text
+
+
+def make_highlighted_strings(tokens_list, predictions_list, CLIENT_WORDS=None, pure_phonemes=False, HELP_VOCAB=None, THRESCHOLD=0.5):
+    from stop_words import get_stop_words
+    STOP_WORDS = get_stop_words('en')
+    N = len(tokens_list)
+    result = []
+    
+    MAX_SEQUENCE_LENGTH = 512
+
+    BADLY_RECOGNIZED_WORDS = defaultdict(float)
+    ALL_TOKENS = defaultdict(float)
+
+    for i in range(N):
+        for t, l in zip(tokens_list[i], predictions_list[i]):
+            if l >= THRESCHOLD and t not in STOP_WORDS:
+                BADLY_RECOGNIZED_WORDS[t] += 1
+            ALL_TOKENS[t] += 1
+    
+    for t in BADLY_RECOGNIZED_WORDS:
+        BADLY_RECOGNIZED_WORDS[t] = BADLY_RECOGNIZED_WORDS[t] / ALL_TOKENS[t]
+    
+    for index in range(N):
+        prev_texts = '' if index > 0 else ' '.join(sum(tokens_list[max(index - 2, 0):index], []))
+        post_texts = '' if index == N - 1 else ' '.join(sum(tokens_list[index + 1:min(index + 2, len(tokens_list))], []))
+
+        # total_length = len(tokens_list[index])
+        # max_length = int(MAX_SEQUENCE_LENGTH * 0.5)
+        # gap = (max_length - total_length) // 2
+        # prev_texts = []
+        # i = index - 1
+        # while i >= 0 and len(prev_texts) < gap:
+        #     n_tokens_remaining = min(len(tokens_list[i]), gap - len(prev_texts))
+        #     prev_texts = tokens_list[i][-n_tokens_remaining:] + prev_texts
+        #     i -= 1
+        # post_texts = []
+        # i = index + 1
+        # while i < len(tokens_list) and len(post_texts) < gap:
+        #     n_tokens_remaining = min(len(tokens_list[i]), gap - len(post_texts))
+        #     post_texts = post_texts + tokens_list[i][:n_tokens_remaining]
+        #     i += 1
+        
+        # total_length = len(prev_texts) + len(tokens_list[index]) + len(post_texts)
+        # print('total_length', total_length, 'max_length', max_length)
+        # prev_texts = ' '.join(prev_texts)
+        # post_texts = ' '.join(post_texts)
+        # print('prev texts', prev_texts)
+        # print()
+        # print('mid text', tokens_list[index])
+        # print()
+        # print('post texts', post_texts)
+
+        line = make_highlighted_string_2(
+            tokens_list[index],
+             predictions_list[index], 
+             BADLY_RECOGNIZED_WORDS=BADLY_RECOGNIZED_WORDS,
+             ALL_TOKENS=ALL_TOKENS,
+             CLIENT_WORDS=CLIENT_WORDS,
+              HELP_VOCAB=HELP_VOCAB,
+               prev_texts=prev_texts, 
+               post_texts=post_texts,
+               pure_phonemes=pure_phonemes,
+               THRESCHOLD=THRESCHOLD
+        )
+        result.append(line)
+    return result
+
+
+
+
+def make_highlighted_text(tokens_list, predictions_list, CLIENT_WORDS=None, HELP_VOCAB=None, THRESCHOLD=0.5):
     def prettify_html(html):
         pref = '''
         <style>
@@ -520,7 +702,15 @@ def make_highlighted_text(tokens_list, predictions_list, CLIENT_WORDS=None):
         '''
         suf = '\n</p>'
         return pref + html + suf
-    lines = [make_highlighted_string(t, p, CLIENT_WORDS=CLIENT_WORDS) for t, p in zip(tokens_list, predictions_list)]
+    def div_display_inline_block(html, width_percent=100):
+        pref = '<div style="display: inline-block; width: {}%">'.format(width_percent)
+        suf = '</div>'
+        return pref + html + suf
+    # lines = [make_highlighted_string(t, p, CLIENT_WORDS=CLIENT_WORDS, HELP_VOCAB=HELP_VOCAB) for t, p in zip(tokens_list, predictions_list)]
+    lines = make_highlighted_strings(tokens_list, predictions_list, CLIENT_WORDS, False, HELP_VOCAB, THRESCHOLD=THRESCHOLD)
+    print('MAKE FIXED STRINGS')
+    # lines_fixed = make_highlighted_strings(tokens_list, predictions_list, CLIENT_WORDS, True, HELP_VOCAB)
+    # lines_fixed = [make_highlighted_string(t, p, CLIENT_WORDS=CLIENT_WORDS, apply_replacements=True, HELP_VOCAB=HELP_VOCAB) for t, p in zip(tokens_list, predictions_list)]
     text = '<br>\n'.join(lines)
-    return prettify_html(text)
-
+    # text_fixed = '<br>\n'.join(lines_fixed)
+    return prettify_html(div_display_inline_block(text, width_percent=100)) # + div_display_inline_block(text_fixed))

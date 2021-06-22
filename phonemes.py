@@ -99,7 +99,7 @@ ALPHABET = nltk.corpus.cmudict.dict()
 
 
 def wordbreak(s):
-    if len(s) >= 40:
+    if len(s) >= 25:
         return None
     s = s.lower()
     if s in ALPHABET:
@@ -406,8 +406,10 @@ def get_closest_words_by_phoneme_levenshtein(spelled_word,
     return items
 
 
-def get_top_phoneme_neighbors(sent, words, n_top=10):
+def get_top_phoneme_neighbors(sent, words, n_top=10, return_scores=False):
     sw = [(get_pronounce_dist(w.lower(), sent.lower()), w.lower()) for w in words]
     sw.sort()
+    if return_scores:
+        return list([(y, x) for (x, y) in sw[:n_top]])
     _, res = zip(*sw[:n_top])
     return list(res)
