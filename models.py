@@ -574,7 +574,7 @@ def make_highlighted_strings(tokens_list, predictions_list, CLIENT_WORDS=None, p
 
     for i in range(N):
         for t, l in zip(tokens_list[i], predictions_list[i]):
-            if l >= THRESCHOLD and t not in STOP_WORDS:
+            if l >= THRESCHOLD and t not in STOP_WORDS and t not in CLIENT_WORDS['special_vocab']:
                 BADLY_RECOGNIZED_WORDS[t] += 1
             ALL_TOKENS[t] += 1
     
