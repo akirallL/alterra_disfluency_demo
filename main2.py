@@ -93,7 +93,7 @@ txt = st.text_area(
 CLIENT_WORDS = {'special_vocab': [w.strip() for w in txt.split() if w.strip()]}
 CLIENT_WORDS['total_vocabulary'] = deepcopy(CLIENT_WORDS['special_vocab'])
 
-alterrra_tokens = read_tokens('/home/akiralll/Downloads/texts.txt')
+alterrra_tokens = read_tokens('./models/texts.txt')
 HELP_VOCAB =  get_most_meaningful_words(alterrra_tokens, n_top=500)
 
 uploaded_file = st.file_uploader("Choose a file")
