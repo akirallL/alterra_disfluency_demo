@@ -14,6 +14,11 @@ from textwrap import dedent
 from lr_fixator import get_most_meaningful_words, read_tokens, get_ngrams_from_client_speech
 
 
+SLOVA_VZDOHI = [
+    'ah', 'eh', 'um', 'oh', 'uh', 'hm', 'mhm'
+]
+
+
 st.title('disfluency detection app')
 
 
@@ -64,7 +69,10 @@ def read_jsonl(text):
         toks_locls = []
         conf_local = []
         for w in s['Words']:
-            toks_locls.append(w['Word'].lower().strip(string.punctuation))
+            word_s = w['Word'].lower().strip(string.punctuation)
+            if word_s in SLOVA_VZDOHI:
+                continue
+            toks_locls.append(word_s)
             conf_local.append(w['Confidence'])
         tokens.append(toks_locls)
         confidences.append(conf_local)
